@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "source": "apps/functions"
+  },
+  "firestore": {
+    "rules": "apps/mobile/firestore.rules"
+  }
+}

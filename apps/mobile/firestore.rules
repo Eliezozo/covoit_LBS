@@ -1,0 +1,41 @@
+rules_version = "2";
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAllowedDomain() {
+      return isSignedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email.matches(".*@lomebs\\.com$");
+    }
+
+    match /users/{userId} {
+      allow read, write: if isAllowedDomain() && request.auth.uid == userId;
+    }
+
+    match /wallets/{userId} {
+      allow read: if isAllowedDomain() && request.auth.uid == userId;
+      allow write: if false;
+    }
+
+    match /rides/{rideId} {
+      allow read: if isAllowedDomain();
+      allow create: if isAllowedDomain();
+      allow update, delete: if isAllowedDomain() && request.auth.uid == resource.data.driverId;
+    }
+
+    match /rideReservations/{reservationId} {
+      allow read: if isAllowedDomain()
+        && (request.auth.uid == resource.data.passengerId
+          || request.auth.uid == resource.data.driverId);
+      allow write: if false;
+    }
+
+    match /transactions/{txId} {
+      allow read: if isAllowedDomain() && request.auth.uid == resource.data.userId;
+      allow write: if false;
+    }
+  }
+}

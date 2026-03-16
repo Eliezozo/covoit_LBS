@@ -1,0 +1,7 @@
+apps/mobile/node_modules
+apps/mobile/.expo
+apps/mobile/.expo-shared
+apps/mobile/dist
+apps/mobile/.env
+apps/mobile/.env.local
+apps/mobile/.DS_Store
