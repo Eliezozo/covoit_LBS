@@ -19,6 +19,16 @@ npm run build
 firebase deploy --only functions
 ```
 
+## Emulators (local)
+Depuis la racine du repo:
+```bash
+firebase emulators:start --only functions,firestore
+```
+
+UI: http://localhost:4000  
+Functions: http://localhost:5001  
+Firestore: http://localhost:8080
+
 ## Admin claims
 Attribuer le claim admin (necessaire pour l'ecran Admin):
 
