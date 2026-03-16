@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, Text, TextInput, View } from "react-native";
-import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
+import { supabase } from "@/lib/supabase";
 
 import { Button } from "@/components/atoms/Button";
 import { Card } from "@/components/atoms/Card";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { purchaseTokens } from "@/features/wallet/api";
 import type { Transaction, Wallet } from "@/features/wallet/types";
-import { db } from "@/lib/firebase";
 
 const MAX_DATE_FALLBACK = Number.MAX_SAFE_INTEGER;
 
@@ -71,40 +70,54 @@ export default function WalletScreen() {
       return;
     }
 
-    const walletRef = doc(db, "wallets", user.uid);
-    const unsubscribeWallet = onSnapshot(
-      walletRef,
-      (snapshot) => {
-        setWallet(snapshot.exists() ? ({ userId: user.uid, ...(snapshot.data() as Wallet) }) : null);
-        setLoading(false);
-        setError(null);
-      },
-      () => {
-        setError("Impossible de charger le wallet.");
-        setLoading(false);
-      }
-    );
+    const fetchData = async () => {
+      try {
+        const { data: walletData, error: walletError } = await supabase
+          .from("wallets")
+          .select("*")
+          .eq("user_id", user.id)
+          .single();
 
-    const txQuery = query(collection(db, "transactions"), where("userId", "==", user.uid));
-    const unsubscribeTx = onSnapshot(
-      txQuery,
-      (snapshot) => {
-        const next = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Omit<Transaction, "id">)
+        if (walletError && walletError.code !== "PGRST116") {
+          throw walletError;
+        }
+
+        const { data: txData, error: txError } = await supabase
+          .from("transactions")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (txError) {
+          throw txError;
+        }
+
+        setWallet(walletData ? {
+          userId: user.id,
+          balance: walletData.balance,
+          updatedAt: walletData.updated_at
+        } : null);
+
+        const nextTransactions = (txData ?? []).map((tx: any) => ({
+          id: tx.id,
+          userId: tx.user_id,
+          type: tx.type,
+          status: tx.status,
+          tokens: tx.tokens,
+          createdAt: tx.created_at
         }));
-        next.sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
-        setTransactions(next);
-      },
-      () => {
-        setError("Impossible de charger les transactions.");
-      }
-    );
 
-    return () => {
-      unsubscribeWallet();
-      unsubscribeTx();
+        setTransactions(nextTransactions);
+        setError(null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Impossible de charger le wallet.";
+        setError(message);
+      } finally {
+        setLoading(false);
+      }
     };
+
+    fetchData();
   }, [user]);
 
   const handlePurchase = useCallback(async () => {

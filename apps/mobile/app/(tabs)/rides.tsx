@@ -11,7 +11,7 @@ import {
   View
 } from "react-native";
 import { BarCodeScanner } from "expo-barcode-scanner";
-import { addDoc, collection, onSnapshot, query, where } from "firebase/firestore";
+import { supabase } from "@/lib/supabase";
 
 import { Button } from "@/components/atoms/Button";
 import { Card } from "@/components/atoms/Card";
@@ -20,7 +20,6 @@ import { ZONES, computeCommission, computeDriverPayout } from "@/config/pricing"
 import { useAuth } from "@/features/auth/AuthProvider";
 import type { Ride, RideReservation } from "@/features/rides/types";
 import { finalizeRide, reserveRideTokens } from "@/features/wallet/api";
-import { db } from "@/lib/firebase";
 
 const MAX_DATE_FALLBACK = Number.MAX_SAFE_INTEGER;
 
@@ -76,81 +75,129 @@ export default function RidesScreen() {
   const selectedZone = useMemo(() => ZONES.find((zone) => zone.id === zoneId), [zoneId]);
 
   useEffect(() => {
-    const ridesRef = collection(db, "rides");
-    const unsubscribe = onSnapshot(
-      ridesRef,
-      (snapshot) => {
-        const next = snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<Ride, "id">) }));
-        next.sort((a, b) => toDateValue(a.departureTime) - toDateValue(b.departureTime));
+    const fetchRides = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("rides")
+          .select("*")
+          .order("departure_time", { ascending: true });
+
+        if (error) {
+          console.error(error);
+          setError("Impossible de charger les trajets.");
+          setLoading(false);
+          return;
+        }
+
+        const next = (data ?? []).map((ride: any) => ({
+          id: ride.id,
+          driverId: ride.driver_id,
+          zoneId: ride.zone_id,
+          seatsTotal: ride.seats_total,
+          seatsAvailable: ride.seats_available,
+          status: ride.status,
+          departureTime: ride.departure_time
+        }));
+
         setRides(next);
         setError(null);
-        setLoading(false);
-      },
-      () => {
+      } catch (err) {
+        console.error(err);
         setError("Impossible de charger les trajets.");
+      } finally {
         setLoading(false);
       }
-    );
+    };
 
-    return unsubscribe;
+    fetchRides();
   }, []);
 
   useEffect(() => {
     if (!user) {
       return;
     }
-    const reservationsQuery = query(
-      collection(db, "rideReservations"),
-      where("driverId", "==", user.uid)
-    );
-    const unsubscribe = onSnapshot(
-      reservationsQuery,
-      (snapshot) => {
-        const next = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Omit<RideReservation, "id">)
+
+    const fetchDriverReservations = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("ride_reservations")
+          .select("*")
+          .eq("driver_id", user.uid)
+          .order("created_at", { ascending: false });
+
+        if (error) {
+          console.error(error);
+          setDriverReservationError("Impossible de charger les reservations conducteur.");
+          setDriverReservationsLoading(false);
+          return;
+        }
+
+        const next = (data ?? []).map((r: any) => ({
+          id: r.id,
+          rideId: r.ride_id,
+          driverId: r.driver_id,
+          passengerId: r.passenger_id,
+          tokensHeld: r.tokens_held,
+          status: r.status,
+          qrToken: r.qr_token,
+          createdAt: r.created_at
         }));
-        next.sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
+
         setDriverReservations(next);
         setDriverReservationError(null);
-        setDriverReservationsLoading(false);
-      },
-      () => {
+      } catch (err) {
+        console.error(err);
         setDriverReservationError("Impossible de charger les reservations conducteur.");
+      } finally {
         setDriverReservationsLoading(false);
       }
-    );
+    };
 
-    return unsubscribe;
+    fetchDriverReservations();
   }, [user]);
 
   useEffect(() => {
     if (!user) {
       return;
     }
-    const passengerQuery = query(
-      collection(db, "rideReservations"),
-      where("passengerId", "==", user.uid)
-    );
-    const unsubscribe = onSnapshot(
-      passengerQuery,
-      (snapshot) => {
-        const next = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...(doc.data() as Omit<RideReservation, "id">)
+
+    const fetchPassengerReservations = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("ride_reservations")
+          .select("*")
+          .eq("passenger_id", user.uid)
+          .order("created_at", { ascending: false });
+
+        if (error) {
+          console.error(error);
+          setPassengerReservationError("Impossible de charger vos reservations.");
+          setPassengerReservationsLoading(false);
+          return;
+        }
+
+        const next = (data ?? []).map((r: any) => ({
+          id: r.id,
+          rideId: r.ride_id,
+          driverId: r.driver_id,
+          passengerId: r.passenger_id,
+          tokensHeld: r.tokens_held,
+          status: r.status,
+          qrToken: r.qr_token,
+          createdAt: r.created_at
         }));
-        next.sort((a, b) => toDateValue(b.createdAt) - toDateValue(a.createdAt));
+
         setPassengerReservations(next);
         setPassengerReservationError(null);
-        setPassengerReservationsLoading(false);
-      },
-      () => {
+      } catch (err) {
+        console.error(err);
         setPassengerReservationError("Impossible de charger vos reservations.");
+      } finally {
         setPassengerReservationsLoading(false);
       }
-    );
+    };
 
-    return unsubscribe;
+    fetchPassengerReservations();
   }, [user]);
 
   const handleCreateRide = useCallback(async () => {
@@ -174,15 +221,22 @@ export default function RidesScreen() {
 
     setSubmitting(true);
     try {
-      await addDoc(collection(db, "rides"), {
-        driverId: user.uid,
-        zoneId,
-        seatsTotal: seats,
-        seatsAvailable: seats,
-        status: "open",
-        departureTime: departureTime.trim(),
-        createdAt: new Date().toISOString()
-      });
+      const { error } = await supabase.from("rides").insert([
+        {
+          driver_id: user.id,
+          zone_id: zoneId,
+          seats_total: seats,
+          seats_available: seats,
+          status: "open",
+          departure_time: departureTime.trim(),
+          created_at: new Date().toISOString()
+        }
+      ]);
+
+      if (error) {
+        throw error;
+      }
+
       setDepartureTime("");
       setSeatsTotal("3");
       Alert.alert("Trajet cree", "Votre trajet est maintenant visible.");

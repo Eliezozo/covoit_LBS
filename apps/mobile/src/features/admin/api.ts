@@ -1,25 +1,25 @@
-import { httpsCallable } from "firebase/functions";
-
-import { functions } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 
 export type CommissionEntry = {
   id: string;
-  rideId: string | null;
-  driverId: string | null;
-  passengerId: string | null;
+  ride_id: string | null;
+  driver_id: string | null;
+  passenger_id: string | null;
   tokens: number;
-  createdAt: string | null;
+  created_at: string | null;
 };
 
 export type CommissionSummary = {
-  totalTokens: number;
-  totalCount: number;
-  last30Tokens: number;
+  total_tokens: number;
+  total_count: number;
+  last30_tokens: number;
   recent: CommissionEntry[];
 };
 
 export async function getCommissionSummary() {
-  const callable = httpsCallable<void, CommissionSummary>(functions, "getCommissionSummary");
-  const result = await callable();
-  return result.data;
+  const { data, error } = await supabase.rpc("get_commission_summary");
+  if (error || !data) {
+    throw new Error(error?.message || "Impossible de charger le rapport de commission.");
+  }
+  return data as CommissionSummary;
 }

@@ -1,6 +1,4 @@
-import { httpsCallable } from "firebase/functions";
-
-import { functions } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 import { ZoneId } from "@/config/pricing";
 
 type ReserveRideInput = {
@@ -9,9 +7,9 @@ type ReserveRideInput = {
 };
 
 type ReserveRideResult = {
-  reservationId: string;
-  tokensHeld: number;
-  qrToken?: string | null;
+  reservation_id: string;
+  tokens_held: number;
+  qr_token?: string | null;
 };
 
 type FinalizeRideInput = {
@@ -20,8 +18,8 @@ type FinalizeRideInput = {
 };
 
 type FinalizeRideResult = {
-  payoutTokens: number;
-  commissionTokens: number;
+  payout_tokens: number;
+  commission_tokens: number;
 };
 
 type PurchaseTokensInput = {
@@ -30,26 +28,37 @@ type PurchaseTokensInput = {
 
 type PurchaseTokensResult = {
   balance: number;
-  transactionId: string;
+  transaction_id: string;
 };
 
 export async function reserveRideTokens(input: ReserveRideInput) {
-  const callable = httpsCallable<ReserveRideInput, ReserveRideResult>(functions, "reserveRide");
-  const result = await callable(input);
-  return result.data;
+  const { data, error } = await supabase.rpc("reserve_ride", {
+    ride_id: input.rideId,
+    zone_id: input.zoneId
+  });
+  if (error || !data) {
+    throw new Error(error?.message || "Échec de la réservation.");
+  }
+  return data as ReserveRideResult;
 }
 
 export async function finalizeRide(input: FinalizeRideInput) {
-  const callable = httpsCallable<FinalizeRideInput, FinalizeRideResult>(functions, "finalizeRide");
-  const result = await callable(input);
-  return result.data;
+  const { data, error } = await supabase.rpc("finalize_ride", {
+    reservation_id: input.reservationId,
+    qr_token: input.qrToken
+  });
+  if (error || !data) {
+    throw new Error(error?.message || "Échec de la finalisation.");
+  }
+  return data as FinalizeRideResult;
 }
 
 export async function purchaseTokens(input: PurchaseTokensInput) {
-  const callable = httpsCallable<PurchaseTokensInput, PurchaseTokensResult>(
-    functions,
-    "purchaseTokens"
-  );
-  const result = await callable(input);
-  return result.data;
+  const { data, error } = await supabase.rpc("purchase_tokens", {
+    tokens: input.tokens
+  });
+  if (error || !data) {
+    throw new Error(error?.message || "Échec de l'achat de jetons.");
+  }
+  return data as PurchaseTokensResult;
 }

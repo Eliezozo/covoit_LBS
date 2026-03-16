@@ -46,7 +46,8 @@ const assertAuth = (context: functions.https.CallableContext) => {
 
 const assertDomain = (context: functions.https.CallableContext) => {
   const email = context.auth?.token?.email ?? "";
-  if (!email.endsWith(`@${ALLOWED_DOMAIN}`)) {
+  const domainRegex = new RegExp(`^[^@]+@${ALLOWED_DOMAIN.replace(".", "\\.")}$`);
+  if (!domainRegex.test(email)) {
     throw new functions.https.HttpsError(
       "permission-denied",
       `Seuls les comptes @${ALLOWED_DOMAIN} sont autorises.`

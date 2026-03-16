@@ -1,7 +1,7 @@
 # Summary (journee)
 
 ## Etat du projet
-- App mobile Expo Router + Firebase + NativeWind operationnelle (PWA mobile-first).
+- App mobile Expo Router + Supabase + NativeWind operationnelle (PWA mobile-first).
 - Auth Google OAuth2 avec restriction stricte sur @lomebs.com.
 - Zonage + commission 20% implementes.
 - Reservation de trajets (sequestre), QR conducteur, scan passager, finalisation.
