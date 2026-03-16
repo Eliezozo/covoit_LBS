@@ -1,7 +1,34 @@
-# Cloud Functions
+# LBS Covoit - Cloud Functions
 
-Fonctions appellees depuis le client pour les transactions sensibles.
+## Prerequis
+- Node 18
+- Firebase CLI connecte a votre projet
 
-## A implementer
-- `reserveRide` : sequestre des jetons + reservation
-- `finalizeRide` : validation QR + transfert + commission
+## Installation
+```bash
+npm install
+```
+
+## Build
+```bash
+npm run build
+```
+
+## Deploiement
+```bash
+firebase deploy --only functions
+```
+
+## Admin claims
+Attribuer le claim admin (necessaire pour l'ecran Admin):
+
+```bash
+GOOGLE_APPLICATION_CREDENTIALS=/chemin/service-account.json \
+node scripts/set-admin-claim.js <uid> true
+```
+
+Pour retirer le claim admin:
+```bash
+GOOGLE_APPLICATION_CREDENTIALS=/chemin/service-account.json \
+node scripts/set-admin-claim.js <uid> false
+```
