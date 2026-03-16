@@ -22,6 +22,8 @@ type AuthContextValue = {
   signInWithGoogle: () => Promise<void>;
   signOutUser: () => Promise<void>;
   domainError: string | null;
+  isAdmin: boolean;
+  refreshClaims: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -30,6 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [domainError, setDomainError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [request, response, promptAsync] = Google.useAuthRequest({
     expoClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
@@ -40,18 +43,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     responseType: "id_token"
   });
 
+  const refreshClaims = useCallback(async () => {
+    const current = auth.currentUser;
+    if (!current) {
+      setIsAdmin(false);
+      return;
+    }
+    try {
+      const token = await current.getIdTokenResult(true);
+      setIsAdmin(Boolean(token.claims.admin));
+    } catch {
+      setIsAdmin(false);
+    }
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
       if (nextUser && !isAllowedEmail(nextUser.email)) {
         setDomainError("Domaine non autorise. Utilisez votre email @lomebs.com.");
         await signOut(auth);
         setUser(null);
+        setIsAdmin(false);
         setLoading(false);
         return;
       }
 
       setUser(nextUser ?? null);
       setDomainError(null);
+      if (nextUser) {
+        try {
+          const token = await nextUser.getIdTokenResult();
+          setIsAdmin(Boolean(token.claims.admin));
+        } catch {
+          setIsAdmin(false);
+        }
+      } else {
+        setIsAdmin(false);
+      }
       setLoading(false);
     });
 
@@ -109,9 +137,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       signInWithGoogle,
       signOutUser,
-      domainError
+      domainError,
+      isAdmin,
+      refreshClaims
     }),
-    [user, loading, signInWithGoogle, signOutUser, domainError]
+    [user, loading, signInWithGoogle, signOutUser, domainError, isAdmin, refreshClaims]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

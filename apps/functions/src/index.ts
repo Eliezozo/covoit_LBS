@@ -60,6 +60,12 @@ const assertDomain = (context: functions.https.CallableContext) => {
   }
 };
 
+const assertAdmin = (context: functions.https.CallableContext) => {
+  if (!context.auth?.token?.admin) {
+    throw new functions.https.HttpsError("permission-denied", "Acces administrateur requis.");
+  }
+};
+
 const asString = (value: unknown, field: string) => {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new functions.https.HttpsError("invalid-argument", `${field} invalide.`);
@@ -249,11 +255,82 @@ export const finalizeRide = functions.https.onCall(async (data, context) => {
       createdAt: now
     });
 
+    const commissionRef = db.collection("commissions").doc();
+    tx.set(commissionRef, {
+      rideId: reservation.rideId,
+      driverId: reservation.driverId,
+      passengerId: reservation.passengerId,
+      tokens: commissionTokens,
+      createdAt: now
+    });
+
+    const metricsRef = db.collection("platformMetrics").doc("commissions");
+    tx.set(
+      metricsRef,
+      {
+        totalTokens: FieldValue.increment(commissionTokens),
+        totalCount: FieldValue.increment(1),
+        updatedAt: now
+      },
+      { merge: true }
+    );
+
     return {
       payoutTokens,
       commissionTokens
     };
   });
+});
+
+export const getCommissionSummary = functions.https.onCall(async (_data, context) => {
+  assertAuth(context);
+  assertDomain(context);
+  assertAdmin(context);
+
+  const metricsSnap = await db.collection("platformMetrics").doc("commissions").get();
+  const metrics = metricsSnap.exists ? metricsSnap.data() : null;
+  const totalTokens = Number(metrics?.totalTokens ?? 0);
+  const totalCount = Number(metrics?.totalCount ?? 0);
+
+  const recentSnap = await db
+    .collection("commissions")
+    .orderBy("createdAt", "desc")
+    .limit(10)
+    .get();
+
+  const recent = recentSnap.docs.map((doc) => {
+    const data = doc.data();
+    const createdAt =
+      typeof data.createdAt?.toDate === "function" ? data.createdAt.toDate().toISOString() : null;
+    return {
+      id: doc.id,
+      rideId: data.rideId ?? null,
+      driverId: data.driverId ?? null,
+      passengerId: data.passengerId ?? null,
+      tokens: Number(data.tokens ?? 0),
+      createdAt
+    };
+  });
+
+  const since = admin.firestore.Timestamp.fromMillis(
+    Date.now() - 30 * 24 * 60 * 60 * 1000
+  );
+  const last30Snap = await db
+    .collection("commissions")
+    .where("createdAt", ">=", since)
+    .get();
+
+  const last30Tokens = last30Snap.docs.reduce((sum, doc) => {
+    const tokens = Number(doc.data().tokens ?? 0);
+    return sum + (Number.isFinite(tokens) ? tokens : 0);
+  }, 0);
+
+  return {
+    totalTokens,
+    totalCount,
+    last30Tokens,
+    recent
+  };
 });
 
 export const purchaseTokens = functions.https.onCall(async (data, context) => {

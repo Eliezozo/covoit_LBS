@@ -37,5 +37,13 @@ service cloud.firestore {
       allow read: if isAllowedDomain() && request.auth.uid == resource.data.userId;
       allow write: if false;
     }
+
+    match /commissions/{commissionId} {
+      allow read, write: if false;
+    }
+
+    match /platformMetrics/{metricId} {
+      allow read, write: if false;
+    }
   }
 }

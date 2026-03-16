@@ -3,10 +3,13 @@ import { ScrollView, Text, View } from "react-native";
 
 import { Button } from "@/components/atoms/Button";
 import { Card } from "@/components/atoms/Card";
+import { useRouter } from "expo-router";
+
 import { useAuth } from "@/features/auth/AuthProvider";
 
 export default function ProfileScreen() {
-  const { user, signOutUser } = useAuth();
+  const router = useRouter();
+  const { user, signOutUser, isAdmin } = useAuth();
 
   return (
     <ScrollView className="flex-1 bg-white px-6" contentContainerStyle={{ paddingBottom: 24 }}>
@@ -29,7 +32,13 @@ export default function ProfileScreen() {
         </View>
       </Card>
 
-      <View className="mt-6">
+      {isAdmin ? (
+        <View className="mt-6">
+          <Button title="Administration" onPress={() => router.push("/admin")} />
+        </View>
+      ) : null}
+
+      <View className={isAdmin ? "mt-3" : "mt-6"}>
         <Button title="Se deconnecter" variant="outline" onPress={signOutUser} />
       </View>
     </ScrollView>
